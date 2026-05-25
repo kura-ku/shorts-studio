@@ -1,4 +1,3 @@
-```python
 import yt_dlp
 import pandas as pd
 from datetime import datetime
