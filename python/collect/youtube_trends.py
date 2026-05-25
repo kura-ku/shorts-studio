@@ -1,121 +1,156 @@
+```python
 import yt_dlp
 import pandas as pd
 from datetime import datetime
 from pathlib import Path
 import time
+import random
 
-# ============================================
+# ==================================================
 # 設定
-# ============================================
+# ==================================================
 
+# 検索カテゴリ
 SEARCH_GROUPS = {
 
     "mindset": [
         "mindset shorts",
         "focus shorts",
-        "self improvement shorts",
-        "discipline shorts",
-        "deep work shorts"
+        "discipline shorts"
     ],
 
     "emotion": [
         "anxiety shorts",
         "overthinking shorts",
-        "mental reset shorts",
-        "burnout shorts",
-        "loneliness shorts"
+        "burnout shorts"
     ],
 
     "ai_future": [
         "AI future shorts",
         "AI jobs shorts",
-        "automation shorts",
-        "AI productivity shorts",
-        "future of work shorts"
+        "automation shorts"
     ]
 }
 
-MAX_RESULTS_PER_QUERY = 10
+# 検索数（最初は少なく）
+MAX_RESULTS_PER_QUERY = 3
 
+# 出力先
 OUTPUT_DIR = Path("data/trends")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 OUTPUT_FILE = OUTPUT_DIR / "youtube_trends.csv"
 
-# ============================================
+# ==================================================
 # yt-dlp 設定
-# ============================================
+# ==================================================
 
 YDL_OPTS = {
 
-    "extract_flat": True,
+    # ログ表示
+    "quiet": False,
 
-    "quiet": True,
-
+    # ダウンロードしない
     "skip_download": True,
 
+    # エラー無視
+    "ignoreerrors": True,
+
+    # SSL
     "nocheckcertificate": True,
 
-    "ignoreerrors": True
+    # フラット取得
+    "extract_flat": True,
+
+    # Bot対策
+    "sleep_interval": 2,
+    "max_sleep_interval": 5,
+
+    # Chrome Cookie利用
+    # Chromeログイン状態を使う
+    "cookiesfrombrowser": ("chrome",),
+
+    # UserAgent
+    "http_headers": {
+        "User-Agent":
+        (
+            "Mozilla/5.0 "
+            "(Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 "
+            "(KHTML, like Gecko) "
+            "Chrome/124.0 Safari/537.36"
+        )
+    }
 }
 
-# ============================================
-# データ格納
-# ============================================
+# ==================================================
+# データ保存
+# ==================================================
 
 all_rows = []
 
-# ============================================
-# メイン処理
-# ============================================
+# ==================================================
+# メイン
+# ==================================================
 
-print("=" * 50)
+print("=" * 60)
 print("YouTube Shorts Trend Collector")
-print("=" * 50)
+print("=" * 60)
 
 with yt_dlp.YoutubeDL(YDL_OPTS) as ydl:
+
+    # ----------------------------------------------
+    # カテゴリループ
+    # ----------------------------------------------
 
     for category, queries in SEARCH_GROUPS.items():
 
         print(f"\nCATEGORY: {category}")
 
+        # ------------------------------------------
+        # 検索ワードループ
+        # ------------------------------------------
+
         for query in queries:
 
             print(f"\nSEARCH: {query}")
 
-            search_url = (
-                "https://www.youtube.com/results?"
-                f"search_query={query}"
+            # --------------------------------------
+            # ytsearch方式へ変更
+            # Bot判定回避
+            # --------------------------------------
+
+            search_query = (
+                f"ytsearch{MAX_RESULTS_PER_QUERY}:{query}"
             )
 
             try:
 
-                # --------------------------------
-                # 検索結果取得
-                # --------------------------------
-
                 result = ydl.extract_info(
-                    search_url,
+                    search_query,
                     download=False
                 )
 
                 if not result:
-                    print("No result")
+                    print("No Result")
                     continue
 
                 entries = result.get("entries", [])
 
                 if not entries:
-                    print("No entries")
+                    print("No Entries")
                     continue
 
-                # --------------------------------
-                # 各動画処理
-                # --------------------------------
+                # ----------------------------------
+                # 動画処理
+                # ----------------------------------
 
-                for entry in entries[:MAX_RESULTS_PER_QUERY]:
+                for entry in entries:
 
                     try:
+
+                        if not entry:
+                            continue
 
                         video_id = entry.get("id")
 
@@ -127,11 +162,11 @@ with yt_dlp.YoutubeDL(YDL_OPTS) as ydl:
                             f"v={video_id}"
                         )
 
-                        print(f"Checking: {video_id}")
+                        print(f"\nChecking: {video_id}")
 
-                        # --------------------------------
-                        # 動画詳細取得
-                        # --------------------------------
+                        # --------------------------
+                        # 詳細取得
+                        # --------------------------
 
                         detail = ydl.extract_info(
                             video_url,
@@ -141,22 +176,28 @@ with yt_dlp.YoutubeDL(YDL_OPTS) as ydl:
                         if not detail:
                             continue
 
+                        # --------------------------
+                        # Shorts判定
+                        # --------------------------
+
                         duration = detail.get("duration")
 
-                        # --------------------------------
-                        # Shorts判定
-                        # --------------------------------
-
                         if duration is None:
+                            print("Skip: duration none")
                             continue
 
                         if duration > 60:
-                            print("Skip: not shorts")
+
+                            print(
+                                f"Skip Long Video: "
+                                f"{duration}s"
+                            )
+
                             continue
 
-                        # --------------------------------
-                        # データ作成
-                        # --------------------------------
+                        # --------------------------
+                        # データ生成
+                        # --------------------------
 
                         row = {
 
@@ -216,21 +257,26 @@ with yt_dlp.YoutubeDL(YDL_OPTS) as ydl:
 
                             "availability":
                                 detail.get("availability")
-
                         }
 
                         all_rows.append(row)
 
                         print(
                             f"OK: "
-                            f"{row['title'][:50]}"
+                            f"{row['title'][:60]}"
                         )
 
-                        # --------------------------------
-                        # 負荷軽減
-                        # --------------------------------
+                        # --------------------------
+                        # ランダムsleep
+                        # --------------------------
 
-                        time.sleep(1)
+                        sleep_time = random.randint(3, 7)
+
+                        print(
+                            f"sleep: {sleep_time}s"
+                        )
+
+                        time.sleep(sleep_time)
 
                     except Exception as e:
 
@@ -238,34 +284,36 @@ with yt_dlp.YoutubeDL(YDL_OPTS) as ydl:
                             f"DETAIL ERROR: {e}"
                         )
 
+                        continue
+
             except Exception as e:
 
                 print(
                     f"SEARCH ERROR: {e}"
                 )
 
-# ============================================
+                continue
+
+# ==================================================
 # DataFrame化
-# ============================================
+# ==================================================
 
 df = pd.DataFrame(all_rows)
 
-# ============================================
+# ==================================================
 # 重複削除
-# ============================================
+# ==================================================
 
 if not df.empty:
 
     df.drop_duplicates(
-        subset=[
-            "video_id"
-        ],
+        subset=["video_id"],
         inplace=True
     )
 
-# ============================================
-# ソート
-# ============================================
+# ==================================================
+# viewsソート
+# ==================================================
 
 if "views" in df.columns:
 
@@ -274,9 +322,9 @@ if "views" in df.columns:
         ascending=False
     )
 
-# ============================================
+# ==================================================
 # CSV保存
-# ============================================
+# ==================================================
 
 df.to_csv(
     OUTPUT_FILE,
@@ -284,16 +332,16 @@ df.to_csv(
     encoding="utf-8-sig"
 )
 
-# ============================================
-# 完了表示
-# ============================================
+# ==================================================
+# 完了
+# ==================================================
 
-print("\n" + "=" * 50)
+print("\n" + "=" * 60)
 print("COLLECT FINISHED")
-print("=" * 50)
+print("=" * 60)
 
-print(f"Saved File: {OUTPUT_FILE}")
-
+print(f"Saved File : {OUTPUT_FILE}")
 print(f"Total Videos: {len(df)}")
 
-print("=" * 50)
+print("=" * 60)
+```
